@@ -9,5 +9,6 @@
 int main()
 {
   sendStrXY("fucking navi lort",5,0);
+  sendCharXY("Nej tak",5,0);
   return 0;  
 }
