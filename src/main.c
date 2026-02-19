@@ -3,129 +3,114 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <avr/interrupt.h>
 #include "I2C.h"
 #include "ssd1306.h" 
+
+bool Iflag = false;
 bool isbuttonactive();
 void init(){
 	PORTK|=0xFF;
 	
     
-    DDRB &=~(1<<7);
-    PORTB |=(1<<7); //internal pullup on digital pin 13
+    DDRE &=~(1<<5);
+    PORTE |=(1<<5); //internal pullup on digital pin 13
 
+    EICRB = 0x00; 
+    EIMSK |= (1<<INT5); // enable INT5 interrupt
+    sei(); // global interrupt
 
 	DDRK &= ~(1<<0);
+
+
+
   PORTK|=(0xFF);
 }
 int counter = 0;
 int main(void)
 {  
-	init();
+    init(); 
   
-  I2C_Init();  //initialize i2c interface to display
+    I2C_Init();  //initialize i2c interface to display
 
-  InitializeDisplay(); //initialize  display
+    InitializeDisplay(); //initialize  display
 
 
-int num [3] ={0};
-char numstring[4][8] = {0};
+int num [3] ={0}; //array til at holde værdierne fra dipswitchen samt sidste entry til at holde resultatet
 
-//itoa(PINK,counterstring,16);
+char numstring[4][8] = {0}; // Array til at holde værdierne fra dipswitchen, så det kan printes.
 
   clear_display();  
   while (1)
   {
-    //sendStrXY(calculationstring,0,0);
-    if (isbuttonactive())
+    if (isbuttonactive()) //Checker om interupt flaget er blevet sat
     {
-        num[0] = PINK;
-         itoa(num[0],numstring[0],16);
-         
-        //  _delay_ms(500);
-        // while (!isbuttonactive());
-
-         //strcat(calculationstring, "\n");
-         sendStrXY(numstring[0],0,0);
+        // Læser første værdi sat på dip switchen ind
+        // og sørger for at den bliver sat ind i en streng og sendt til oled skærmen
+        num[0] = PINK; 
+        itoa(num[0],numstring[0],16);
+        sendStrXY(numstring[0],0,0);
         _delay_ms(500);
-        while (!isbuttonactive());
+
+        while (!isbuttonactive()); // Venter på næste tryk
+        
+        // Læser anden værdi sat på dip switchen in
+        // og sørger for at den bliver sat ind i en streng og sendt til oled skærmen
         num[1] = PINK;
         itoa(num[1],numstring[1],16);
-         
-         sendStrXY(numstring[1],3,0);
+        sendStrXY(numstring[1],4,0);
+        _delay_ms(500);
 
-         _delay_ms(500);
+
         while (!isbuttonactive());
-        //num[2] = PINK;
         switch (PINK)
         {
-        case 0xff:
-            strcat(numstring[2], "&");
+        case 0xff: // AND case
+            strcat(numstring[2], "AND");
             num[2] = num[0] & num[1];
             itoa(num[2],numstring[3],16);
             break;
-        case 0xfe:
-            strcat(numstring[2], "|");
+        case 0xfe: // Or Case
+            strcat(numstring[2], "OR");
             num[2] = num[0] | num[1];
             itoa(num[2],numstring[3],16);
             break;
-        case 0x7f:
-            strcat(numstring[2], "&~");
+        case 0x7f: // AND NOT Case
+            strcat(numstring[2], "AND NOT");
             num[2] = num[0] &~ num[1];
             itoa(num[2],numstring[3],16);
             break;
-        default:
+        default: // Ole's special Case
+        clear_display();
+        printBigTime("OLE HVA FAEN");
             break;
         }
+        // printer resultatet
         sendStrXY(numstring[2],2,0);
-        //_delay_ms(1000);
-        sendStrXY(numstring[3],5,0);
-         _delay_ms(500);
-        while (!isbuttonactive());
-        numstring[2][0] = '\0';
-        clear_display();
+        sendStrXY(numstring[3],6,0);
         _delay_ms(500);
 
-         
-       //  sendStrXY(calculationstring,,0);
-        // strcat(calculationstring, " = ");
-        //strcat(calculationstring,"\n");
-         //sendStrXY(calculationstring,0,0);
-        //  numafterlogic = num1 + num2;
-        //  itoa(numafterlogic,tmpstring,2);
-        //  strcat(calculationstring, "hej");
-        //  sendStrXY(calculationstring,0,0);
-         
-
+        while (!isbuttonactive()); // Venter på button reset tryk
         
-        
-        
-            
-        
-        
-        
+        numstring[2][0] = '\0'; // nul terminerer strengen, så vi kan genbruge den
+        clear_display();
+        _delay_ms(500);
     }
-    
-    // itoa(counter,counterstring,10);
-    // sendStrXY(counterstring,0,0);
-    // counter++;
-    // _delay_ms(1000);
   } 
 }
 
- bool isbuttonactive()
+bool isbuttonactive()
  {
-     if (!(PINB&(1<<7)))
-     {
+    if (Iflag) // Interrupt flag
+    {
         _delay_ms(50);
-
-        if (!(PINB&(1<<7)))
-        {
-            while(!(PINB&(1<<7)));
-            _delay_ms(50);
-            return true;
-        }
-        else return false;
-        
-     }
+        Iflag = false;
+        return true;
+    }
      else return false;
+ }
+
+ ISR (INT5_vect)
+ {
+    Iflag = true;
  }
